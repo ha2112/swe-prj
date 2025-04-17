@@ -9,6 +9,14 @@ import pylcs
 import pandas as pd
 import textwrap
 from vertexai.preview import tokenization
+from chunking_evaluation.chunking import ClusterSemanticChunker
+from chromadb.utils import embedding_functions
+import os
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain.prompts import PromptTemplate
+from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
+
+
 
 
 def clean_presentation_text(text):
@@ -161,8 +169,82 @@ def clean_text(text: str) -> str:
 
     return text.strip()
 
+def clean_pdf_data(text: str) -> str:
+    information_condenser_model = ChatGoogleGenerativeAI(
+        model = "gemini-2.5-pro-exp-03-25",
+        temperature = 0,
+        max_tokens=None,
+        timeout=None
+    )
+
+    condense_information_prompt_template = """
+You are an expert AI agent specializing in cleaning text extracted from PDF files to optimize its quality for use in a Retrieval-Augmented Generation (RAG) system. Your primary objective is to transform raw, often noisy text inside backticks into a clean, coherent, and highly informative format while meticulously preserving every piece of original information and its context.
+
+Your responsibilities include:
+
+1.  **Eliminate Extraneous Content:** Identify and remove headers, footers, page numbers, watermarks, and any other repetitive or non-content-bearing elements introduced during PDF extraction. Be careful not to remove content that might appear similar but is actually part of the main text.
+
+2.  **Correct Line Breaks and Hyphenation:** Accurately join words split across lines due to hyphenation or formatting. Ensure natural and grammatically correct sentence flow. Pay close attention to the context of the surrounding words to avoid incorrectly merging words that happen to be at the end and beginning of lines.
+
+3.  **Standardize Spacing and Formatting:** Ensure consistent and appropriate spacing between words, sentences, and paragraphs. Remove any redundant spaces, tabs, or unnecessary line breaks that might hinder readability or the RAG system's performance. Aim for a clean and well-structured flow of text.
+
+4.  **Maintain Structural Integrity:** Preserve the logical structure of the original document, including paragraph breaks, bullet points, numbered lists, and section headings (if discernible). This helps maintain context and readability. Recognize different formatting cues that indicate structural elements.
+
+5.  **Handle Special Elements with Care:**
+    * **Tables:** If the text contains tables, attempt to retain their structure using appropriate formatting (e.g., Markdown tables if feasible, or clear delimiters like tabs or consistent spacing). If structural preservation is challenging, prioritize retaining all the data within the table in a readable format.
+    * **Code Blocks:** If the text includes code blocks, ensure they are clearly demarcated using common code block indicators (e.g., triple backticks in Markdown) and that the code content remains intact and formatted as consistently as possible.
+    * **Equations and Formulas:** If present, try to preserve them in a readable format. If the original formatting is lost, consider using common representations like LaTeX-style syntax if appropriate and if it enhances readability without altering the meaning.
+
+6.  **Absolute Information Preservation is Paramount:** Your paramount concern is to ensure that no factual information, data, figures, specific terminology, or context is lost during the cleaning process. If you encounter any ambiguity or uncertainty about whether to remove or modify a piece of text, prioritize preserving it exactly as it appears in the original extracted text. Do not make assumptions or inferences that could lead to information loss.
+
+7.  **Output Format:** The final output must be a single, continuous string of clean text, with logical paragraph breaks maintained (e.g., using double line breaks). Avoid introducing any new information, rephrasing content, or altering the meaning of the original text in any way. Your sole purpose is to clean the formatting for better readability and RAG system performance.
+
+Think step by step and justify your cleaning decisions based on the principles of information preservation and improved readability for a RAG system. If you are ever unsure, lean towards preserving the original text.
+
+```
+{text}
+```
+    """
+
+    condense_information_prompt = PromptTemplate(template=condense_information_prompt_template, input_variables=["text"])
+
+    string_output_parser = StrOutputParser()
+
+    condense_chain = (
+        {"text": lambda x: x}  # Identity function to pass the text
+        | condense_information_prompt
+        | information_condenser_model
+        | string_output_parser # Use string output parser
+    )
+    """
+    Condenses the input text using the Gemini LLM and LangChain.
+
+    Args:
+        text: The raw text to condense.
+
+    Returns:
+        A condensed and structured version of the text.
+    """
+
+    return condense_chain.invoke(text)
+
 def count_tokens_for_gemini(str) -> int:
     model_name = "gemini-1.5-pro-002"
     tokenizer = tokenization.get_tokenizer_for_model(model_name)
     token_count = tokenizer.count_tokens(str)
     return token_count
+
+
+gemini_api_key = os.getenv("GOOGLE_API_KEY")
+os.environ["GOOGLE_API_KEY"] = gemini_api_key
+embedding_function = embedding_functions.GoogleGenerativeAiEmbeddingFunction(api_key = os.environ["GOOGLE_API_KEY"], model_name="models/text-embedding-004")
+
+
+def cluster_chunking(str):
+    cluster_chunker = ClusterSemanticChunker(
+        embedding_function=embedding_function,
+        max_chunk_size = 400
+    )
+    cluster_chunker_chunks = cluster_chunker.split_text(str)
+    return cluster_chunker_chunks
+
