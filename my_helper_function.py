@@ -208,14 +208,15 @@ def count_tokens_for_gemini(str) -> int:
 
 gemini_api_key = os.getenv("GOOGLE_API_KEY")
 os.environ["GOOGLE_API_KEY"] = gemini_api_key
-embedding_function = embedding_functions.GoogleGenerativeAiEmbeddingFunction(api_key = os.environ["GOOGLE_API_KEY"], model_name="models/text-embedding-004")
+EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL", "models/text-embedding-004")
+embedding_function = embedding_functions.GoogleGenerativeAiEmbeddingFunction(api_key = os.environ["GOOGLE_API_KEY"], model_name=EMBEDDING_MODEL_NAME)
 
 
-def cluster_chunking(str):
+def cluster_chunking(str_text):
     cluster_chunker = ClusterSemanticChunker(
         embedding_function=embedding_function,
         max_chunk_size = 400
     )
-    cluster_chunker_chunks = cluster_chunker.split_text(str)
+    cluster_chunker_chunks = cluster_chunker.split_text(str_text)
     return cluster_chunker_chunks
 
