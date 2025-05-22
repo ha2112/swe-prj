@@ -93,7 +93,7 @@ def txt_text_extract(file_path):
 
 
 ### BASIC DATA CLEANING: REMOVING NOTATIONS, ETC.
-def clean_text(text: str) -> str:
+def clean_text_basic(text: str) -> str:
     """
     Cleans the input text by removing unnecessary characters, extra spaces,
     and standardizing formatting.  Handles common issues in OCR'd text.
@@ -138,7 +138,7 @@ def clean_text(text: str) -> str:
 
 
 ### AI-DRIVEN DATA EXTRACTOR
-def clean_pdf_data(text: str) -> str:
+def llm_clean_data(text: str) -> str:
     information_condenser_model = ChatGoogleGenerativeAI(
         model = "gemini-2.5-pro-exp-03-25",
         temperature = 0,
